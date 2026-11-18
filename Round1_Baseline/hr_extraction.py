@@ -1,3 +1,5 @@
+"""Team FFT estimators and single-video plotting experiment."""
+
 import numpy as np
 import scipy
 
@@ -6,52 +8,59 @@ if __package__:
 else:
     from filters import band_pass_butter_filtering, smoothness_priors_detrend
 
-# Fourier Transform to get the most relevant frequencies of the signal
-def ffourier_transform(signal, fps):
-  # Applies Fourier Transform to the signal
-  fourier = scipy.fft.fft(signal)
-  # Gets indexes of the signal and converts them into timestamps for each value of FFT
-  freq_array = scipy.fft.fftfreq(len(signal), 1.0/fps)
 
-  return fourier, freq_array
+def ffourier_transform(signal, fps=30):
+    fourier = scipy.fft.fft(signal)
+    freq_array = scipy.fft.fftfreq(len(signal), 1.0 / fps)
+    return fourier, freq_array
 
-# Returns value of heart rate for a computed Fourier transform
-def get_hr_bpm(fourier, freq_array):
+
+def get_hr_bpm(signal, fps=30):
+    """Return the team's unrestricted FFT peak in BPM for a sampled signal."""
+    fourier, freq_array = ffourier_transform(signal, fps)
     idx = np.abs(fourier).argmax()
-    hr = freq_array[idx]*60
-    return hr
+    return freq_array[idx] * 60
+
 
 def extract_hr(raw_signal, fps, fc, N=3):
-
-    """
-        KEY INPUTS:
-        - Raw signal
-        - Pass band filter: cut-off frequency (fc=[fc_lower, fc_upper]), order (N), fps (get from video)
-
-        OUTPUT:
-        - Heart Rate signal
-
-        Inputs for testing:
-        - Ground Truth signal
-    """
-
-    detrended_signal = smoothness_priors_detrend(raw_signal, lmbda=(fps/(2 * np.pi * 0.1))**2)
+    """Preserve the raw-signal filtering entry point used by evaluation."""
+    detrended_signal = smoothness_priors_detrend(raw_signal, lmbda=(fps / (2 * np.pi * 0.1))**2)
     filtered = band_pass_butter_filtering(detrended_signal, fps, fc, N)
-    fourier, freq_array = ffourier_transform(filtered, fps)
-    heart_rate = get_hr_bpm(fourier, freq_array)
+    return get_hr_bpm(filtered, fps)
 
-    return heart_rate
 
-def sliding_window():
-   ...
-   return 0
+def sliding_window(signal, window_size_seconds=10, step_size_seconds=1, fps=30):
+    """Return complete windows and center times in seconds, including empty results.
 
-def extract_hr_signal():
-   ...
-   return 0
+    Durations are rounded to the nearest frame for fractional frame rates.
+    Windows are read-only views; trailing incomplete windows are omitted.
+    """
+    signal = np.asarray(signal)
+    if signal.ndim != 1:
+        raise ValueError("Signal must be one-dimensional")
+    if not all(np.isfinite(v) and v > 0 for v in (fps, window_size_seconds, step_size_seconds)):
+        raise ValueError("FPS and window/step durations must be finite and positive")
+    frame_counts = np.array([window_size_seconds, step_size_seconds]) * fps
+    if not np.isfinite(frame_counts).all():
+        raise ValueError("Window/step durations exceed the finite sample range")
+    window_size_frames, step_size_frames = (int(round(v)) for v in frame_counts)
+    if min(window_size_frames, step_size_frames) < 1:
+        raise ValueError("Window and step must each span at least one frame")
+    if len(signal) < window_size_frames:
+        return np.empty((0, window_size_frames), dtype=signal.dtype), np.empty(0)
+    windows = np.lib.stride_tricks.sliding_window_view(signal, window_size_frames)[::step_size_frames]
+    time = (np.arange(len(windows)) * step_size_frames + window_size_frames / 2) / fps
+    return windows, time
 
-# Original team experiment; importing the estimator never runs it.
-if __name__ == "__main__":
+
+def extract_hr_signal(signal, fps=30):
+    """Estimate the team's HR trace from an already filtered signal."""
+    windows, time = sliding_window(signal, fps=fps)
+    hr = [get_hr_bpm(window, fps) for window in windows]
+    return time, hr
+
+
+def main():
     from pathlib import Path
 
     import matplotlib.pyplot as plt
@@ -66,27 +75,34 @@ if __name__ == "__main__":
     Path("Results").mkdir(parents=True, exist_ok=True)
     target_video = 'target_video.mp4'
 
+    #---------------------------------
+    # 1. Signal extraction from video
+    #---------------------------------
     green_forehead, fps = signal_extraction_main_forehead(target_video, 'g')
     green_cheeks, fps = signal_extraction_main_cheeks(target_video, 'g')
 
     time = [i/fps for i in range(len(green_forehead))]
+    print(f"fps: {fps}")
 
     # Cheeks - raw signal
     plt.figure(figsize=(15,5))
     plt.plot(time, green_cheeks, linestyle='-', marker='o', color="green")
     plt.title("Green Cheeks")
-    plt.xlabel("Time (ms)")
+    plt.xlabel("Time (s)")
     plt.ylabel("Channel intensity")
-    plt.savefig("Results/cheeks_raw.png")
+    plt.savefig("Results/raw_cheeks.png")
 
     # Forehead
     plt.figure(figsize=(15,5))
     plt.plot(time, green_forehead, linestyle='-', marker='o', color="green")
     plt.title("Green Forehead")
-    plt.xlabel("Time (ms)")
+    plt.xlabel("Time (s)")
     plt.ylabel("Channel intensity")
-    plt.savefig("Results/forehead_raw.png")
+    plt.savefig("Results/raw_forehead.png")
 
+    #--------------
+    # 2. Filtering
+    #--------------
     # Detrending filter - raw signal
     fc = 0.2
     lmbda = (fps/(2 * np.pi * fc))**2
@@ -105,7 +121,7 @@ if __name__ == "__main__":
     plt.xlabel("Frame")
     plt.ylabel("Mean green intensity")
     plt.grid(True)
-    plt.savefig("Results/forehead_filtered.png")
+    plt.savefig("Results/filtered_forehead.png")
 
     plt.figure(figsize=(10,5))
     plt.plot(filtered_signal_cheeks, linestyle='-', marker='o', color="green")
@@ -113,9 +129,11 @@ if __name__ == "__main__":
     plt.xlabel("Frame")
     plt.ylabel("Mean green intensity")
     plt.grid(True)
-    plt.savefig("Results/cheeks_filtered.png")
+    plt.savefig("Results/filtered_cheeks.png")
 
-    # FFT
+    #------------------------------
+    # 3.1 Dominant HR - Simple FFT
+    #------------------------------
     fourier_forehead, freq_array_forehead = ffourier_transform(filtered_signal_forehead, fps)
     fourier_cheeks, freq_array_cheeks = ffourier_transform(filtered_signal_cheeks, fps)
 
@@ -125,7 +143,7 @@ if __name__ == "__main__":
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Magnitude")
     plt.grid(True)
-    plt.savefig("Results/fft_forehead.png")
+    plt.savefig("Results/forehead_fft.png")
 
     plt.figure(figsize=(10,5))
     plt.plot(freq_array_cheeks, np.abs(fourier_cheeks), linestyle='-', marker='o', color="green")
@@ -133,10 +151,41 @@ if __name__ == "__main__":
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Magnitude")
     plt.grid(True)
-    plt.savefig("Results/fft_cheeks.png")
+    plt.savefig("Results/cheeks_fft.png")
 
     # heart rate
-    hr_forehead = extract_hr(green_forehead, fps, fc, N=3)
+    hr_forehead = get_hr_bpm(filtered_signal_forehead, fps=fps)
     print(f"Heart Rate (forehead): {hr_forehead:.2f} BPM")
-    hr_cheeks = extract_hr(green_cheeks, fps, fc, N=3)
+    hr_cheeks = get_hr_bpm(filtered_signal_cheeks, fps=fps)
     print(f"Heart Rate (cheeks): {hr_cheeks:.2f} BPM")
+
+    #--------------------------------------------------
+    # 3.2 HR signal extraction - FFT to sliding window
+    #--------------------------------------------------
+
+    time, hr_forehead = extract_hr_signal(filtered_signal_forehead, fps=fps)
+    time_c, hr_cheeks = extract_hr_signal(filtered_signal_cheeks, fps=fps)
+
+    plt.figure(figsize=(10,5))
+    plt.plot(time, hr_forehead, linestyle='-', marker='o', color="green")
+    plt.title("HR signal - Forehead")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Heart rate (BPM)")
+    plt.grid(True)
+    plt.savefig("Results/hr_forehead.png")
+
+
+    plt.figure(figsize=(10,5))
+    plt.plot(time_c, hr_cheeks, linestyle='-', marker='o', color="green")
+    plt.title("HR signal - Cheeks")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Heart rate (BPM)")
+    plt.grid(True)
+    plt.savefig("Results/hr_cheeks.png")
+
+    plt.close("all")
+    print("For paired ground-truth metrics, use python -m Round1_Baseline.evaluate --help")
+
+
+if __name__ == "__main__":
+    main()

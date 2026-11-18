@@ -4,8 +4,9 @@ Implemented locally on `cleanup/round1-consolidation`, starting at `c7e88bf`.
 The pre-deletion [file-by-file plan](cleanup_plan.md) classified all 43 tracked
 files using their contents, Git log, rename history and blame. Old code was kept
 until the replacement passed all 73 relevant tests, including actual C4/C5 encoding.
-No commit, push, merge, history rewrite or modification of the original separate
-development repository was performed.
+The initial cleanup made no commit, push, merge or history rewrite and did not
+modify the original separate development repository. Subsequent integration is
+recorded at the end of this document.
 
 ## Complete deleted-path inventory (17)
 
@@ -180,8 +181,8 @@ tool, model, participant file or generated report was added to version control.
    behavior; choose a validated corrected wheel/version before requiring a fully
    clean platform-metadata check. No local patch hides the metadata problem.
 6. No protected-file deletion needs approval. Only future scientific/MediaPipe
-   changes above require team agreement. This branch remains local and uncommitted;
-   no automatic merge or push was performed. Previous implementations are recoverable
+   changes above require team agreement. At the time of this initial validation,
+   the branch was local and uncommitted. Previous implementations are recoverable
    from `c7e88bf` / `377877c` Git history.
 
 
@@ -208,3 +209,34 @@ Second-pass validation: `ruff check Round1_Baseline tests` passed;
 available. `git diff --check` passed. All local documentation links resolve;
 the final inventory is 35 files with all 17 deleted original paths documented.
 The MediaPipe platform-metadata limitation remains as reported above.
+
+
+## Integration with main (2026-11-18)
+
+PR #1 conflicted because main advanced from `c7e88bf` to Leonor's `ff9b690`
+while the cleanup branch contained `b332736`. The conflict was in
+`Round1_Baseline/hr_extraction.py`; `notes.txt` merged automatically and retains
+Leonor's new notes. Main was merged into the cleanup branch without rewriting
+history.
+
+The resolution retains the cleanup's package/direct-script imports, import-time
+safety and automatic Results directory, plus Leonor's signal-based
+`get_hr_bpm`, sliding windows, HR traces and eight demonstration plots.
+`extract_hr(raw_signal, fps, fc, N=3)` remains available for the dataset evaluator,
+using the same detrending, Butterworth filter and unrestricted FFT peak.
+The earlier AST/byte preservation comparisons above describe the pre-integration
+cleanup, not the newly integrated HR functions and notes.
+
+Window extraction now accepts array-like signals, uses read-only bounded NumPy
+views, rounds fractional-FPS durations to frames, rejects invalid durations and
+returns a consistent empty pair for short recordings. The demo passes the actual
+FPS to both HR traces and labels seconds/BPM correctly. Its unfinished empty
+reference comparison would raise a length mismatch, so it directs users to the
+existing dataset evaluator for actual paired metrics.
+
+Validation in `/private/tmp/round1-validation`, with FFmpeg/ffprobe available:
+**87 tests passed, 0 skipped** (7.38 s), including actual team ROI integration,
+C4/C5 encoding, import safety, 25/30/29.97 FPS window boundaries, empty traces,
+invalid window parameters and all eight demo plots on controlled input.
+Ruff, actionlint, evaluator `--help` and whitespace/conflict-marker checks passed.
+No real participant recording or scientific accuracy result is claimed.

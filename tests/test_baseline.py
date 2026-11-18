@@ -20,11 +20,72 @@ def test_team_numerical_path_and_existing_fft_sign_behavior():
     detrended = smoothness_priors_detrend(raw, (25 / (2 * np.pi * 0.1)) ** 2)
     filtered = band_pass_butter_filtering(detrended, 25, [1, 2], 3)
     spectrum, frequency = hr_extraction.ffourier_transform(filtered, 25)
-    expected = hr_extraction.get_hr_bpm(spectrum, frequency)
+    expected = frequency[np.abs(spectrum).argmax()] * 60
+    assert hr_extraction.get_hr_bpm(filtered, fps=25) == expected
     assert hr_extraction.extract_hr(raw, 25, [1, 2]) == expected
     assert expected == pytest.approx(72, abs=2)
+
+
+def test_fft_sign_behavior_is_preserved(monkeypatch):
     # This limitation is documented, not silently corrected by consolidation.
-    assert hr_extraction.get_hr_bpm(np.array([0, 1, 4]), np.array([0, 0.5, -0.5])) == -30
+    monkeypatch.setattr(
+        hr_extraction, "ffourier_transform",
+        lambda signal, fps: (np.array([0, 1, 4]), np.array([0, 0.5, -0.5])),
+    )
+    assert hr_extraction.get_hr_bpm(np.ones(3)) == -30
+
+
+@pytest.mark.parametrize("fps", [25, 30, 29.97])
+def test_sliding_windows_preserve_samples_and_center_times(fps):
+    signal = np.arange(round(13 * fps))[::-1]
+    windows, times = hr_extraction.sliding_window(signal, fps=fps)
+    width, step = round(10 * fps), round(fps)
+    expected = [signal[start:start + width] for start in range(0, len(signal) - width + 1, step)]
+    np.testing.assert_array_equal(windows, expected)
+    np.testing.assert_allclose(times, (np.arange(len(expected)) * step + width / 2) / fps)
+    assert not windows.flags.writeable
+
+
+@pytest.mark.parametrize("signal", [[], [1, 2, 3]])
+def test_short_hr_trace_has_consistent_empty_results(signal):
+    windows, times = hr_extraction.sliding_window(signal)
+    assert windows.shape == (0, 300) and times.shape == (0,)
+    time, hr = hr_extraction.extract_hr_signal(signal)
+    assert time.size == 0 and hr == []
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"fps": 0}, {"fps": float("nan")}, {"fps": float("inf")},
+    {"window_size_seconds": -1}, {"step_size_seconds": 0},
+    {"step_size_seconds": 0.001},
+])
+def test_invalid_window_parameters_fail_explicitly(kwargs):
+    with pytest.raises(ValueError):
+        hr_extraction.sliding_window(np.arange(600), **kwargs)
+
+
+def test_hr_trace_uses_the_actual_frame_rate():
+    fps = 25
+    signal = np.sin(2 * np.pi * 1.2 * np.arange(325) / fps)
+    time, hr = hr_extraction.extract_hr_signal(signal, fps=fps)
+    np.testing.assert_array_equal(time, [5, 6, 7, 8])
+    np.testing.assert_allclose(hr, 72)
+
+
+def test_single_video_demo_writes_hr_plots_without_fake_reference(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    fps = 25
+    signal = 120 + 3 * np.sin(2 * np.pi * 1.2 * np.arange(325) / fps)
+    for module, name in (
+        (channels_forehead, "signal_extraction_main_forehead"),
+        (channels_cheeks, "signal_extraction_main_cheeks"),
+    ):
+        monkeypatch.setattr(module, name, lambda *args: (signal, fps))
+    hr_extraction.main()
+    plots = list((tmp_path / "Results").glob("*.png"))
+    assert len(plots) == 8
+    assert all(path.stat().st_size > 0 for path in plots)
+    assert "Round1_Baseline.evaluate" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("roi", ["cheeks", "forehead"])

@@ -25,6 +25,12 @@ existing model using `--model-path` for offline work. The team's original helper
 can also download on first extraction if the model is absent. Imports never
 start a download, decode a video or run the HR plotting demo. The demo is still
 available with `python -m Round1_Baseline.hr_extraction`, using `target_video.mp4`.
+It saves raw, filtered, FFT and sliding-window HR plots in `Results/`, using the
+video FPS. `get_hr_bpm(signal, fps=30)` accepts an already filtered signal;
+`extract_hr(raw_signal, fps, fc, N=3)` retains the evaluator's filtering path.
+`extract_hr_signal(signal, fps=30)` returns window-center times and HR values
+using 10-second windows and 1-second steps; short signals return empty results.
+For reference metrics, use the dataset evaluator above with actual ground truth.
 
 Retain `python -m pip freeze` and the Git revision with experiments. Do not install
 multiple OpenCV distributions together. The retained MediaPipe 0.10.21 wheel has
@@ -81,7 +87,7 @@ the **unchanged team estimator**. Returned nonpositive/nonfinite HR fails with a
 reason; the raw value is retained and never silently converted to its absolute value.
 
 The unrestricted FFT argmax, integer ROI FPS/detector timing, missing-detection
-behavior, EVM filters and unfinished team hooks are preserved. Changing those
+behavior and EVM filters are preserved. Changing those
 scientific choices requires team review. The evaluator cannot establish that a
 periodic signal is physiological; real mask/HR inspection is still necessary.
 
