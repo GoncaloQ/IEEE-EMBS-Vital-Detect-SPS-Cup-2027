@@ -1,0 +1,17 @@
+Testar:
+
+Filtros vs sem Filtros
+EVM vs sem EVM
+
+Testar outro canal de cor (HSV)
+
+Testar melhor resultado com as duas constraints e reportar resultados
+
+Coisas a ter em conta:
+Selecionar um valor
+
+Perguntas:
+Ground Truth do dataset da competição
+Que valor selecionar? Testas ou bochecha? Usar pico mais alto? Média
+PPG signal for the whole video??? Sim :(
+Testar área menor para deteção das ROI?

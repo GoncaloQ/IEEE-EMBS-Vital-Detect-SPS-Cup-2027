@@ -10,13 +10,7 @@ import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-
-def download_model_if_missing(model_path="face_landmarker.task"):
-    model_url = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
-    if not os.path.exists(model_path):
-        print("Downloading face_landmarker.task model...")
-        urllib.request.urlretrieve(model_url, model_path)
-        print("Download complete!")
+from utils import download_model_if_missing
 
 def extract_upper_cheeks_rgb(video_path: str, model_path: str = "face_landmarker.task"):
     """
@@ -127,7 +121,7 @@ def extract_upper_cheeks_rgb(video_path: str, model_path: str = "face_landmarker
     detector.close()
 
     print(f"Extraction complete! Extracted {len(r_means)} frame measurements.")
-    return np.array(r_means), np.array(g_means), np.array(b_means)
+    return np.array(r_means), np.array(g_means), np.array(b_means), fps
 
 
 def signal_extraction_main_cheeks(input_video, input_channel):
@@ -138,12 +132,12 @@ def signal_extraction_main_cheeks(input_video, input_channel):
   '''
 
   # Run signal extraction
-  r_vector, g_vector, b_vector= extract_upper_cheeks_rgb(input_video)
+  r_vector, g_vector, b_vector, fps = extract_upper_cheeks_rgb(input_video)
   if input_channel == 'r':
-      return r_vector
+      return r_vector, fps
   elif input_channel == 'g':
-      return g_vector
+      return g_vector, fps
   elif input_channel == 'b':
-      return b_vector
+      return b_vector, fps
   else:
       print('invalid input channel')
