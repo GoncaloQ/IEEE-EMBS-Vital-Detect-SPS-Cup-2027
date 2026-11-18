@@ -7,9 +7,9 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
-from vital_detect.datasets.ubfc import discover
-from vital_detect.pipeline import evaluate_recording, summarize
-from vital_detect.reporting.outputs import write_csv, write_json, write_outputs
+from .dataset import discover
+from .evaluate import METHOD, evaluate_recording, summarize
+from .reporting import write_csv, write_json, write_outputs
 
 
 def _run(command):
@@ -157,14 +157,13 @@ def benchmark(
     config,
     subjects=None,
     constraints=("C4", "C5"),
-    roi_factory=None,
+    signal_extractor=None,
     dataset_name="UBFC-rPPG Dataset 2",
 ):
-    from vital_detect.roi.face import FaceROI
-
-    roi_factory = FaceROI if roi_factory is None else roi_factory
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise ValueError("Install ffmpeg and ffprobe before running benchmarks")
+    if set(constraints) - {"C4", "C5"}:
+        raise ValueError("Unknown robustness constraint")
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     recordings = discover(data_dir, subjects)
@@ -217,7 +216,7 @@ def benchmark(
                     row, wins = evaluate_recording(
                         recording,
                         config,
-                        roi_factory,
+                        signal_extractor,
                         video_override=path,
                         interval_bounds=intervals[recording.recording_id],
                     )
@@ -227,8 +226,7 @@ def benchmark(
                 row = {
                     "subject_id": recording.subject_id,
                     "recording_id": recording.recording_id,
-                    "video_path": recording.recording_id,
-                    "method": config.method,
+                    "method": METHOD,
                     "roi": config.roi,
                     "status": "failed",
                     "reason": f"{type(exc).__name__}: {exc}",
@@ -239,7 +237,9 @@ def benchmark(
             windows.extend(wins)
             print(f"{condition} {recording.subject_id}: {row['status']}", flush=True)
         summary = summarize(rows, windows, config, dataset_name)
-        summary["roi_provider"] = f"{roi_factory.__module__}.{roi_factory.__qualname__}"
+        summary["signal_extractor"] = (
+            "team ROI" if signal_extractor is None else "custom/test extractor"
+        )
         summary["dataset_root"] = str(Path(data_dir).resolve())
         summary["experiment"] = {"command": "benchmark", "constraints": list(constraints)}
         summary["condition"] = condition

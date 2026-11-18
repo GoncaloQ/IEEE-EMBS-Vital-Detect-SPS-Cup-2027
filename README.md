@@ -1,214 +1,164 @@
-# Vital Detect — IEEE SPS Cup 2027 FaceVitals
+# Vital Detect — IEEE EMBS SPS Cup 2027
 
-Round 1 heart rate inference and UBFC-rPPG Dataset 2 evaluation, developed by
-**IEEE EMBS UP Student Branch**. The pipeline decodes facial video, extracts
-forehead/cheek RGB signals with MediaPipe, estimates HR using GREEN or POS, aligns
-sensor HR, and exports MAE, RMSE, Pearson r and Bland–Altman analysis.
+The team's Round 1 implementation lives in `Round1_Baseline/`. Evaluation uses
+Diana/Leonor's forehead or bilateral cheek extraction, the team's smoothness-priors
+and Butterworth filters, Leonor's `extract_hr` FFT estimator, and Round1 metrics.
+Inês/Leonor's EVM experiments and Diana's MATLAB experiments remain available.
 
-**Synthetic validation complete; genuine UBFC video validation pending.** An
-official reference file was checked, but no real-video accuracy results are
-available. No clinical accuracy, C3 identity tracking, HD baseline compliance,
-streaming or edge deployment is claimed. SpO2/BP are outside this implementation.
+The separate estimator/package has been consolidated. There is one evaluation
+entry point: **`python -m Round1_Baseline.evaluate`**. No POS or independent GREEN
+estimator remains. Selecting the team's green channel is still supported.
 
-## Installation
+## Install and prepare
 
-Use **Python 3.11**; declared compatibility: 3.10–3.12. Local validation used macOS
-Apple Silicon/Python 3.11; the Linux/macOS CI matrix is configured but its remote
-execution has not been verified in this audit. Run from the repository root:
+Use Python **3.11** (supported range 3.10–3.12):
 
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install -e '.[test]'
-vital-detect download-model
+python -c "from Round1_Baseline.utils import download_model_if_missing; download_model_if_missing('models/face_landmarker.task')"
 ```
 
-The explicit download verifies the official version-1 Face Landmarker model's
-checksum and saves it under ignored `models/`. Inference is offline. Use
-`--model-path /path/to/face_landmarker.task` to select an existing local model.
+The last command explicitly downloads the version-1 MediaPipe model; supply an
+existing model using `--model-path` for offline work. The team's original helper
+can also download on first extraction if the model is absent. Imports never
+start a download, decode a video or run the HR plotting demo. The demo is still
+available with `python -m Round1_Baseline.hr_extraction`, using `target_video.mp4`.
 
-Dependencies are constrained in `pyproject.toml`; retain `python -m pip freeze`
-with each experiment. Do not install multiple OpenCV wheel distributions.
-Minimal Linux installations may need `libgl1 libegl1 libgles2 libportaudio2`.
-MediaPipe on macOS needs a permitted graphics context even with CPU inference;
-use a normal terminal if a sandbox blocks initialization.
+Retain `python -m pip freeze` and the Git revision with experiments. Do not install
+multiple OpenCV distributions together. The retained MediaPipe 0.10.21 wheel has
+an ARM64 platform-metadata inconsistency with modern dependency checkers despite
+working universal binaries; see the exact failure in [cleanup results](docs/cleanup_results.md). Minimal Linux installations may need
+`libgl1 libegl1 libgles2 libportaudio2`. MediaPipe may need a permitted graphics
+context on macOS even for CPU inference.
 
-## Dataset
+## Dataset and evaluation
 
-Obtain **Dataset 2 (realistic)** manually from the
-[official UBFC-rPPG source](https://sites.google.com/view/ybenezeth/ubfcrppg).
-Read the distribution README and agreement first. Keep recordings private:
+Obtain UBFC-rPPG **Dataset 2** through its
+[official page](https://sites.google.com/view/ybenezeth/ubfcrppg), read its agreement,
+and keep it outside version control:
 
 ```text
 /path/to/DATASET_2/
-├── subject1/
-│   ├── vid.avi
-│   └── ground_truth.txt
-└── subjectN/
-    ├── vid.avi
-    └── ground_truth.txt
+  subject1/vid.avi
+  subject1/ground_truth.txt
+  subject2/vid.avi
+  subject2/ground_truth.txt
 ```
 
-The verified format is three whitespace-separated rows: **PPG amplitudes, HR in
-BPM, timestamps in seconds**. Raw values/timestamps are preserved; repeated
-instants are counted and coalesced only for HR integration. Malformed references,
-backward timestamps, missing files and incorrect subject associations are reported.
-Dataset 1 and UBFC-Phys formats are unsupported. See [sources](docs/sources_and_notebook.md).
-
-The official source describes 42 research recordings at native 640×480, nominal
-30 FPS. Actual video metadata is measured. Native VGA does not establish the
-competition's HD baseline. Do not redistribute recordings or publish facial images
-of subjects 21/27. The pipeline exports no facial images or subject-labeled plots.
-
-## Commands
-
-One single-subject MP4/AVI, without ground truth:
+The reference file has three whitespace-separated rows: PPG amplitudes, **sensor
+HR in BPM**, timestamps in **seconds**. Dataset 1 and UBFC-Phys are unsupported.
+No genuine facial recording was available/processed during this cleanup.
 
 ```bash
-vital-detect infer --video /path/to/vid.avi --method green --roi cheeks --output outputs/inference.json
+# Selected recordings (omit --subjects for the full dataset)
+python -m Round1_Baseline.evaluate --data-dir /path/to/DATASET_2 --subjects subject1 subject2 --output-dir outputs/subset
+
+# Team forehead implementation, with independent window evaluation disabled
+python -m Round1_Baseline.evaluate --data-dir /path/to/DATASET_2 --roi forehead --no-windows --output-dir outputs/forehead
+
+# Reproduce parameters and subject selection from a prior experiment
+python -m Round1_Baseline.evaluate --data-dir /path/to/DATASET_2 --subjects subject1 subject2 --config outputs/subset/config.json --output-dir outputs/repeated
 ```
 
-Selected subjects:
+Use `--help` for all options. Flags override saved options. Outputs must use a new
+or empty directory. Exit codes are 0 for a batch with all recording pairs, 1 for a
+completed batch with recording failures, and 2 for setup/configuration errors.
+Window failures are logged separately. One recording failure does not stop a batch.
+
+Defaults mirror the team demo: green channel, bilateral cheeks, **1–2 Hz band,
+order 3**. Minimum evaluated span is 10 seconds; windows are 15 seconds with
+5-second stride. These are experiment settings, not demonstrated optimal settings.
+ROI choice, band and final scoring protocol require team agreement.
+
+Decoder timestamps and frame counts are checked separately from the team's ROI
+extractor (two streaming decode passes, no stored video frames). Evaluation maps
+the team's zero-filled missed detections to unavailable observations, requires
+90% valid samples, and interpolates only short supported gaps (≤0.25 s). It does
+not extrapolate or trim away failed interval edges. A uniform time grid goes into
+the **unchanged team estimator**. Returned nonpositive/nonfinite HR fails with a
+reason; the raw value is retained and never silently converted to its absolute value.
+
+The unrestricted FFT argmax, integer ROI FPS/detector timing, missing-detection
+behavior, EVM filters and unfinished team hooks are preserved. Changing those
+scientific choices requires team review. The evaluator cannot establish that a
+periodic signal is physiological; real mask/HR inspection is still necessary.
+
+Primary metrics are one pair per recording: MAE, RMSE, Pearson r and descriptive
+Bland–Altman bias/limits from `Round1_Baseline/metrics.py`. Reference is time-weighted
+sensor HR over the exact prediction interval. `shared-clock` assumes the dataset's
+common clock; `recording-start` explicitly aligns first samples. A nonzero
+`--reference-offset-s` requires independent `--offset-provenance`. Do not tune
+alignment to final evaluation errors. Hardware latency/drift remain unverified.
+
+Generated files: `per_video_results.csv`, `per_window_results.csv`,
+`evaluation_failures.csv`, `summary_metrics.json`, `config.json`,
+`evaluation_report.md`, `estimated_vs_reference.png`, `bland_altman.png`,
+`error_distribution.png`. CSVs retain intervals, failures, hashes and timing;
+JSON retains model hash, options, software versions and separate descriptive window
+metrics. Even an all-failed batch writes reports and labeled empty plots.
+See [the evaluation protocol and dataset sources](docs/evaluation_protocol.md).
+
+## Robustness experiments
+
+Preserved MATLAB scripts:
+
+- `generate_low_resolution_video.m`: orientation-aware exact VGA/QVGA resizing,
+  bicubic interpolation, MPEG-4 at original FPS.
+- `generate_partial_occlusion_video.m`: tracked lower-face occlusion.
+
+Install FFmpeg **and ffprobe** on PATH for automated Python comparisons:
 
 ```bash
-vital-detect evaluate --dataset ubfc --data-dir /path/to/DATASET_2 --subjects subject1 subject2 --output-dir outputs/subset
+python -m Round1_Baseline.evaluate --data-dir /path/to/DATASET_2 --subjects subject1 subject2 --benchmark C5 --output-dir outputs/c5
+python -m Round1_Baseline.evaluate --data-dir /path/to/DATASET_2 --benchmark C4 C5 --output-dir outputs/robustness
 ```
 
-Complete dataset:
+Python C4 remains a distinct lossless FFV1 spatial control: no upscaling, preserved
+aspect ratio and measured metadata checks. It is not equivalent to MATLAB's exact
+size, lossy MPEG-4 experiment. C5 reduces FPS to at most 10 and verifies stream and
+container average bitrate ≤500 kbps, dimensions, FPS, origin and duration. Each
+condition uses the team's baseline and has its own reports. The manifest records
+commands, measured metadata, timing and FFmpeg version. Error deltas require both
+conditions to succeed over identical intervals; failed/nonmatching pairs stay
+visible. Temporary transformed videos are removed automatically.
 
-```bash
-vital-detect evaluate --dataset ubfc --data-dir /path/to/DATASET_2 --method pos --output-dir outputs/ubfc
-```
+These are offline transformations. They establish neither streaming performance
+nor HD acquisition compliance; native UBFC VGA cannot supply an HD baseline.
 
-The official wrapper supports the same arguments:
-
-```bash
-python Round1_Baseline/process_round1.py evaluate --data-dir /path/to/DATASET_2 --output-dir outputs/round1
-```
-
-Repeat an experiment with its saved configuration and the same subject selection:
-
-```bash
-vital-detect evaluate --data-dir /path/to/DATASET_2 --config outputs/ubfc/config.json --output-dir outputs/repeated
-```
-
-Flags override JSON settings. Use `vital-detect evaluate --help` for all options.
-Output directories must be empty unless `--overwrite` is explicit. Exit codes:
-0 = successful batch/inference; 1 = completed batch with recording failures;
-2 = configuration/setup/inference failure. Individual window failures are logged
-separately. Failed recordings do not stop a batch.
-
-## Processing and evaluation
-
-The implementation adapts landmark masks, RGB averaging and Butterworth filtering
-from the original Vital Detect notebook; [the source audit](docs/sources_and_notebook.md)
-documents reused ideas, corrections, official readers and POS attribution.
-
-ROI options: `forehead`, `left_cheek`, `right_cheek`, `cheeks` (bilateral,
-area weighted; anatomical sides in an unmirrored image). Methods: `green` and `pos`.
-Default band is 0.7–3 Hz (42–180 BPM), minimum duration 10 s, windows 15 s with
-5 s stride. Signals require 90% valid samples; only interior gaps ≤0.25 s are
-interpolated. Missing detections remain NaN. Multiple detected faces or uncertain
-target continuity fail explicitly. Preverified single-subject inputs are required.
-Minimum duration is measured between the first and last retained timestamps.
-`--no-windows` disables window estimation; its CSV then contains only the header.
-
-Actual video timestamps are used when exposed; otherwise frame index/metadata FPS
-is recorded as a CFR assumption. Invalid initial nonzero timestamps cause failure,
-instead of silently changing the timebase. Uniform resampling, linear detrending, normalization,
-order-3 zero-phase SOS filtering and a Hann periodogram produce a quality-gated
-dominant in-band frequency. Quality gates are heuristics, not biological confidence.
-No method or offset is selected using final evaluation errors.
-
-Primary metrics use one pair per recording. Reference is time-weighted sensor HR
-over exactly the retained prediction interval, without extrapolation or reference
-gaps >1 s. Default `--sync-policy shared-clock` assumes the dataset's acquisition
-convention; hardware latency remains unverified. `recording-start` explicitly aligns
-first samples. Nonzero `--reference-offset-s` requires independent
-`--offset-provenance`; never fit offsets to evaluation errors.
-
-MAE/RMSE use BPM. Pearson r is null for insufficient or constant data. Bland–Altman
-uses estimated − reference, bias and bias ±1.96 sample SD (`ddof=1`); limits are
-null for n<2 and unstable with small samples. Independent, approximately normal,
-constant-variance differences are assumed; no confidence intervals are inferred.
-Window metrics are separate correlated descriptive observations, not independent
-subjects. Changing HR can make dominant frequency differ from mean reference.
-See the complete [evaluation protocol](docs/evaluation_protocol.md).
-
-## Generated files
-
-| File | Contents |
-| --- | --- |
-| `per_video_results.csv` | IDs, HR pairs/errors, intervals, metadata, frame counts, quality, hashes, failures and timing |
-| `per_window_results.csv` | Window estimates and their own synchronized references |
-| `summary_metrics.json` | Primary/separate window metrics, counts, null reasons, configuration, model hash and versions |
-| `evaluation_failures.csv` | Recording/window exclusions and reasons |
-| `estimated_vs_reference.png` | Scatter with identity line |
-| `bland_altman.png` | Recording bias and available limits |
-| `error_distribution.png` | Signed-error histogram |
-| `evaluation_report.md` | Results, limitations and reproduction instructions |
-| `config.json` | Reusable algorithm/alignment parameters |
-
-Empty evaluations still generate reports and labeled figures. Additional counts,
-success rate, timing and median error remain distinct from official metrics.
-Datasets, models and generated outputs are ignored by Git.
-
-## C4/C5 robustness
-
-Install FFmpeg/ffprobe on PATH (`brew install ffmpeg` on macOS or
-`sudo apt-get install ffmpeg` on Debian/Ubuntu):
-
-```bash
-vital-detect benchmark --dataset ubfc --data-dir /path/to/DATASET_2 --constraints C4 C5 --subjects subject1 subject2 --output-dir outputs/robustness
-```
-
-Omit subjects for the complete dataset. Conditions: native, VGA, QVGA and
-≤10 FPS/≤500 kbps. C4 preserves aspect ratio, never upscales and uses lossless
-encoding. C5 applies H.264 compression and frame-rate reduction. ffprobe verifies
-actual dimensions/FPS/bitrate/duration; unsupported conditions fail explicitly.
-Each condition has separate reports; the manifest records measured metadata,
-commands, FFmpeg version and timing. Same-recording error changes are calculated
-only for matching retained intervals. Temporary transformed videos are removed.
-Requested resolution/FPS and timestamp origins are verified; unknown source
-duration/origin prevents synchronized condition comparison. Reports save the
-subject selection and a shell-quoted reproduction command with the correct paths.
-These are offline experiments, not streaming/edge or real-data C4/C5 validation.
-
-## Tests and structure
-
-```bash
-python -m pytest -q
-ruff check src tests Round1_Baseline/process_round1.py
-```
-
-Local audit checks include the full test suite, actual FFmpeg transformations,
-installed CLI, package build and native MediaPipe failure handling. The validation
-record is in the [evaluation protocol](docs/evaluation_protocol.md#audit-status).
-Real UBFC video evaluation remains pending.
-Tests cover signal recovery, POS algebra, invalid samples/FPS/Nyquist, metrics,
-dataset/alignment, decoding/ROI policies, integration, failures, reproducibility,
-outputs and measured FFmpeg transformations. FFmpeg tests skip explicitly if its
-executables are absent. CI downloads neither participant data nor models.
+## Structure and checks
 
 ```text
-Round1_Baseline/process_round1.py
-Round2_HR_SpO2/
-Round3_Constrained/
-Round4_FullSystem_Clinical/
-src/vital_detect/
-  cli.py, config.py, pipeline.py
-  datasets/ video/ roi/ signals/ hr/ evaluation/ reporting/ robustness/
-tests/  docs/  .github/workflows/tests.yml
-pyproject.toml
+Round1_Baseline/
+  __init__.py
+  channels_forehead.py  channels_cheeks.py
+  hr_extraction.py  filters.py  metrics.py  utils.py
+  evaluate.py  dataset.py  video.py  reporting.py  robustness.py
+  evm.py  EVM_Option_1.ipynb  notes.txt
+  generate_low_resolution_video.m  generate_partial_occlusion_video.m
+Round2_HR_SpO2/.gitkeep
+Round3_Constrained/.gitkeep
+Round4_FullSystem_Clinical/.gitkeep
+tests/
+docs/
+.github/workflows/tests.yml
+pyproject.toml  MANIFEST.in
 ```
 
-The [official regulations](https://signalprocessingsociety.org/sites/default/files/2026-10/2027-SP-Cup-Official-Document-FaceVitals.pdf)
-remain the submission specification. Evaluation outputs do not replace final MAT
-packaging or the technical report. The three-round/four-directory mapping needs
-organizer clarification; all official directory names are retained.
+```bash
+ruff check Round1_Baseline tests
+python -m pytest -q
+```
 
-Next: evaluate one genuine UBFC video, then a subset and all available subjects;
-review masks/alignment/failures and justify C4/C5 using measured results. Future
-SpO2/BP integration may reuse video/ROI/time contracts but requires separate
-methods, reference channels and validation. No participant collection is performed.
+CI runs synthetic tests and controlled-landmark integration of the actual team
+functions; it downloads no participant recordings or models. FFmpeg-dependent
+tests skip explicitly when those executables are absent locally. A green CI run
+is **not evidence of baseline accuracy on genuine facial videos**. MATLAB scripts
+and the EVM notebook are preserved experiments, not automatically validated by CI.
+
+The [cleanup plan](docs/cleanup_plan.md) records every original file and historical
+evidence. [Cleanup results](docs/cleanup_results.md) list deletions, migrations,
+actual validation and remaining team decisions. Implementations remain recoverable
+from Git history at `c7e88bf`; official round directories are unchanged. The original
+separate development repository has not been modified.

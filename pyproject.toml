@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vital-detect"
-version = "1.0.0"
-description = "Reproducible Round 1 facial-video heart rate evaluation"
+version = "1.1.0"
+description = "Team Round 1 baseline and synchronized UBFC evaluation"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
@@ -19,15 +19,13 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8.3,<9", "ruff>=0.11,<0.12"]
 
-[project.scripts]
-vital-detect = "vital_detect.cli:main"
-
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["Round1_Baseline*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
@@ -35,3 +33,6 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.setuptools.package-data]
+Round1_Baseline = ["*.m", "*.ipynb", "notes.txt"]

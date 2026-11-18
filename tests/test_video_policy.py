@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import pytest
 
-from vital_detect.video.reader import VideoReader
+from Round1_Baseline.video import VideoReader
 
 
 class FakeCapture:

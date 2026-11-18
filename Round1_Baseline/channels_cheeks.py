@@ -3,14 +3,16 @@ input any video of a person in .mp4 and choose the rgb channel you want to extra
 output is the mean of each frame of the rgb channel after masking only the cheeks of the person
 '''
 
-import os
-import urllib.request
 import cv2
-import numpy as np
 import mediapipe as mp
+import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from utils import download_model_if_missing
+
+if __package__:
+    from .utils import download_model_if_missing
+else:
+    from utils import download_model_if_missing
 
 def extract_upper_cheeks_rgb(video_path: str, model_path: str = "face_landmarker.task"):
     """

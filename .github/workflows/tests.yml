@@ -1,4 +1,4 @@
-name: Synthetic HR pipeline tests
+name: Round 1 synthetic integration tests
 
 on:
   push:
@@ -38,6 +38,6 @@ jobs:
         run: brew install ffmpeg
       - run: python -m pip install --upgrade pip
       - run: python -m pip install '.[test]'
-      - run: vital-detect --help
-      - run: ruff check src tests Round1_Baseline/process_round1.py
+      - run: python -m Round1_Baseline.evaluate --help
+      - run: ruff check Round1_Baseline tests
       - run: python -m pytest -q

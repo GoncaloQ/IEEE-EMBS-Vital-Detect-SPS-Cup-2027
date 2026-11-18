@@ -3,8 +3,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from vital_detect.config import Config
-from vital_detect.datasets.ubfc import discover, read_ground_truth
+from Round1_Baseline.dataset import discover, read_ground_truth
+from Round1_Baseline.evaluate import Options
 
 
 def test_discovery_counts_missing_files(dataset):
@@ -50,10 +50,10 @@ def test_verified_format_preserves_units_and_time(tmp_path):
         gt.mean_interval(0, 1)
     with pytest.raises(ValueError, match="gap"):
         gt.mean_interval(2, 3, max_gap_s=0.2)
-    aligned = gt.aligned_times(0, Config(sync_policy="recording-start"))
+    aligned = gt.aligned_times(0, Options(sync_policy="recording-start"))
     assert aligned[0] == 0
     assert gt.timestamps_s[0] == 2
-    assert gt.aligned_times(0, Config())[0] == 2
+    assert gt.aligned_times(0, Options())[0] == 2
 
 
 def test_duplicate_instants_preserved_and_coalesced_only_for_integration(tmp_path):
