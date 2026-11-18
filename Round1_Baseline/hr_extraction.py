@@ -1,12 +1,14 @@
 import scipy
 import numpy as np
 from filters import *
+import matplotlib.pyplot as plt
 
 from channels_forehead import signal_extraction_main_forehead
 from channels_cheeks import signal_extraction_main_cheeks
+from metrics import calculate_metrics
 
 # Fourier Transform to get the most relevant frequencies of the signal
-def ffourier_transform(signal, fps):
+def ffourier_transform(signal, fps=30):
   # Applies Fourier Transform to the signal
   fourier = scipy.fft.fft(signal)
   # Gets indexes of the signal and converts them into timestamps for each value of FFT
@@ -15,115 +17,185 @@ def ffourier_transform(signal, fps):
   return fourier, freq_array
 
 # Returns value of heart rate for a computed Fourier transform
-def get_hr_bpm(fourier, freq_array):
+def get_hr_bpm(signal, fps=30):
+    fourier, freq_array = ffourier_transform(signal, fps)
     idx = np.abs(fourier).argmax()
     hr = freq_array[idx]*60
     return hr
 
-def extract_hr(raw_signal, fps, fc, N=3):
+# def extract_hr(raw_signal, fc, N=3, fps=30):
+#     """
+#         KEY INPUTS:
+#         - Raw signal
+#         - Band pass filter: cut-off frequency (fc=[fc_lower, fc_upper]), order (N), fps (get from video)
 
-    """
-        KEY INPUTS:
-        - Raw signal
-        - Pass band filter: cut-off frequency (fc=[fc_lower, fc_upper]), order (N), fps (get from video)
+#         OUTPUT:
+#         - Heart Rate value
 
-        OUTPUT:
-        - Heart Rate signal
+#         Inputs for testing:
+#         - Ground Truth
+#     """
 
-        Inputs for testing:
-        - Ground Truth signal
-    """
+#     detrended_signal = smoothness_priors_detrend(raw_signal, lmbda=(fps/(2 * np.pi * 0.1))**2)
+#     filtered = band_pass_butter_filtering(detrended_signal, fps, fc, N)
+#     heart_rate = get_hr_bpm(filtered, fps)
 
-    detrended_signal = smoothness_priors_detrend(raw_signal, lmbda=(fps/(2 * np.pi * 0.1))**2)
-    filtered = band_pass_butter_filtering(detrended_signal, fps, fc, N)
-    fourier, freq_array = ffourier_transform(filtered, fps)
-    heart_rate = get_hr_bpm(fourier, freq_array)
+#     return heart_rate
 
-    return heart_rate
+def sliding_window(signal, window_size_seconds=10, step_size_seconds=1, fps=30):
+   window_size_frames = window_size_seconds*fps
+   step_size_frames = step_size_seconds*fps
 
-def sliding_window():
-   ...
-   return 0
+   samples = len(signal)
 
-def extract_hr_signal():
-   ...
-   return 0
+   if samples < window_size_frames:
+      return []
+
+   n_windows = (samples-window_size_frames)//step_size_frames + 1
+   shape = (n_windows, window_size_frames)
+   strides = (signal.strides[0] * step_size_frames, signal.strides[0])
+    
+   windows = np.lib.stride_tricks.as_strided(signal, shape=shape, strides=strides)
+   time = np.array([(i * step_size_frames + window_size_frames / 2) / fps for i in range(n_windows)])
+   return windows, time
+
+def extract_hr_signal(signal, fps=30):
+       
+   hr = []
+   windows, time = sliding_window(signal, fps=fps)
+   for window in windows:
+      hr.append(get_hr_bpm(window, fps))
+
+   return time, hr
 
 # -------------------------------------- TEST --------------------------------------
-import matplotlib.pyplot as plt
-target_video = 'target_video.mp4'
+# Test single video - outputs raw signal, filtered signal, FFT result and estimated HR signal
+# Computes evaluation metrics for that video
 
-green_forehead, fps = signal_extraction_main_forehead(target_video, 'g')
-green_cheeks, fps = signal_extraction_main_cheeks(target_video, 'g')
+def main():
+    target_video = 'target_video.mp4'
 
-time = [i/fps for i in range(len(green_forehead))]
+    #---------------------------------
+    # 1. Signal extraction from video
+    #---------------------------------
+    green_forehead, fps = signal_extraction_main_forehead(target_video, 'g')
+    green_cheeks, fps = signal_extraction_main_cheeks(target_video, 'g')
 
-# Cheeks - raw signal
-plt.figure(figsize=(15,5))
-plt.plot(time, green_cheeks, linestyle='-', marker='o', color="green")
-plt.title("Green Cheeks")
-plt.xlabel("Time (ms)")
-plt.ylabel("Channel intensity")
-plt.savefig("Results/cheeks_raw.png")
+    time = [i/fps for i in range(len(green_forehead))]
+    print(f"fps: {fps}")
 
-# Forehead
-plt.figure(figsize=(15,5))
-plt.plot(time, green_forehead, linestyle='-', marker='o', color="green")
-plt.title("Green Forehead")
-plt.xlabel("Time (ms)")
-plt.ylabel("Channel intensity")
-plt.savefig("Results/forehead_raw.png")
+    # Cheeks - raw signal
+    plt.figure(figsize=(15,5))
+    plt.plot(time, green_cheeks, linestyle='-', marker='o', color="green")
+    plt.title("Green Cheeks")
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Channel intensity")
+    plt.savefig("Results/raw_cheeks.png")
 
-# Detrending filter - raw signal
-fc = 0.2
-lmbda = (fps/(2 * np.pi * fc))**2
-detrended_signal_forehead = smoothness_priors_detrend(green_forehead, lmbda)
-detrended_signal_cheeks = smoothness_priors_detrend(green_cheeks, lmbda)
+    # Forehead
+    plt.figure(figsize=(15,5))
+    plt.plot(time, green_forehead, linestyle='-', marker='o', color="green")
+    plt.title("Green Forehead")
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Channel intensity")
+    plt.savefig("Results/raw_forehead.png")
 
-# Band-pass filter definition
-fc = [1, 2.0]
-N = 3
-filtered_signal_forehead = band_pass_butter_filtering(detrended_signal_forehead, fps, fc, N)
-filtered_signal_cheeks = band_pass_butter_filtering(detrended_signal_cheeks, fps, fc, N)
+    #--------------
+    # 2. Filtering
+    #--------------
+    # Detrending filter - raw signal
+    fc = 0.2
+    lmbda = (fps/(2 * np.pi * fc))**2
+    detrended_signal_forehead = smoothness_priors_detrend(green_forehead, lmbda)
+    detrended_signal_cheeks = smoothness_priors_detrend(green_cheeks, lmbda)
 
-plt.figure(figsize=(10,5))
-plt.plot(filtered_signal_forehead, linestyle='-', marker='o', color="green")
-plt.title("Filtered Green Channel Forehead")
-plt.xlabel("Frame")
-plt.ylabel("Mean green intensity")
-plt.grid(True)
-plt.savefig("Results/forehead_filtered.png")
+    # Band-pass filter definition
+    fc = [1, 2.0]
+    N = 3
+    filtered_signal_forehead = band_pass_butter_filtering(detrended_signal_forehead, fps, fc, N)
+    filtered_signal_cheeks = band_pass_butter_filtering(detrended_signal_cheeks, fps, fc, N)
 
-plt.figure(figsize=(10,5))
-plt.plot(filtered_signal_cheeks, linestyle='-', marker='o', color="green")
-plt.title("Filtered Green Channel Cheeks")
-plt.xlabel("Frame")
-plt.ylabel("Mean green intensity")
-plt.grid(True)
-plt.savefig("Results/cheeks_filtered.png")
+    plt.figure(figsize=(10,5))
+    plt.plot(filtered_signal_forehead, linestyle='-', marker='o', color="green")
+    plt.title("Filtered Green Channel Forehead")
+    plt.xlabel("Frame")
+    plt.ylabel("Mean green intensity")
+    plt.grid(True)
+    plt.savefig("Results/filtered_forehead.png")
 
-# FFT
-fourier_forehead, freq_array_forehead = ffourier_transform(filtered_signal_forehead, fps)
-fourier_cheeks, freq_array_cheeks = ffourier_transform(filtered_signal_cheeks, fps)
+    plt.figure(figsize=(10,5))
+    plt.plot(filtered_signal_cheeks, linestyle='-', marker='o', color="green")
+    plt.title("Filtered Green Channel Cheeks")
+    plt.xlabel("Frame")
+    plt.ylabel("Mean green intensity")
+    plt.grid(True)
+    plt.savefig("Results/filtered_cheeks.png")
 
-plt.figure(figsize=(10,5))
-plt.plot(freq_array_forehead, np.abs(fourier_forehead), linestyle='-', marker='o', color="green")
-plt.title("Fourier Transform Green Channel Forehead")
-plt.xlabel("Frequency (Hz)")
-plt.ylabel("Magnitude")
-plt.grid(True)
-plt.savefig("Results/fft_forehead.png")
+    #------------------------------
+    # 3.1 Dominant HR - Simple FFT
+    #------------------------------
+    fourier_forehead, freq_array_forehead = ffourier_transform(filtered_signal_forehead, fps)
+    fourier_cheeks, freq_array_cheeks = ffourier_transform(filtered_signal_cheeks, fps)
 
-plt.figure(figsize=(10,5))
-plt.plot(freq_array_cheeks, np.abs(fourier_cheeks), linestyle='-', marker='o', color="green")
-plt.title("Fourier Transform Green Channel Cheeks")
-plt.xlabel("Frequency (Hz)")
-plt.ylabel("Magnitude")
-plt.grid(True)
-plt.savefig("Results/fft_cheeks.png")
+    plt.figure(figsize=(10,5))
+    plt.plot(freq_array_forehead, np.abs(fourier_forehead), linestyle='-', marker='o', color="green")
+    plt.title("Fourier Transform Green Channel Forehead")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude")
+    plt.grid(True)
+    plt.savefig("Results/forehead_fft.png")
 
-# heart rate
-hr_forehead = extract_hr(green_forehead, fps, fc, N=3)
-print(f"Heart Rate (forehead): {hr_forehead:.2f} BPM")
-hr_cheeks = extract_hr(green_cheeks, fps, fc, N=3)
-print(f"Heart Rate (cheeks): {hr_cheeks:.2f} BPM")
+    plt.figure(figsize=(10,5))
+    plt.plot(freq_array_cheeks, np.abs(fourier_cheeks), linestyle='-', marker='o', color="green")
+    plt.title("Fourier Transform Green Channel Cheeks")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude")
+    plt.grid(True)
+    plt.savefig("Results/cheeks_fft.png")
+
+    # heart rate
+    hr_forehead = get_hr_bpm(filtered_signal_forehead, fps=fps)
+    print(f"Heart Rate (forehead): {hr_forehead:.2f} BPM")
+    hr_cheeks = get_hr_bpm(filtered_signal_cheeks, fps=fps)
+    print(f"Heart Rate (cheeks): {hr_cheeks:.2f} BPM")
+
+    #--------------------------------------------------
+    # 3.2 HR signal extraction - FFT to sliding window
+    #--------------------------------------------------
+
+    time, hr_forehead = extract_hr_signal(filtered_signal_forehead)
+    time_c, hr_cheeks = extract_hr_signal(filtered_signal_cheeks)
+
+    plt.figure(figsize=(10,5))
+    plt.plot(time, hr_forehead, linestyle='-', marker='o', color="green")
+    plt.title("HR signal - Forehead")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Frequency (Hz)")
+    plt.grid(True)
+    plt.savefig("Results/hr_forehead.png")
+
+
+    plt.figure(figsize=(10,5))
+    plt.plot(time_c, hr_cheeks, linestyle='-', marker='o', color="green")
+    plt.title("HR signal - Cheeks")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Frequency (Hz)")
+    plt.grid(True)
+    plt.savefig("Results/hr_cheeks.png")
+
+    #---------------
+    # 4. Evaluation
+    #---------------
+    # Import and sample Ground Truth
+    gt = []
+    gt_time = []
+    
+    # Compute evaluation metrics
+    eval_report_forehead = calculate_metrics(hr_forehead, gt)
+    print(eval_report_forehead)
+
+    eval_report_cheeks = calculate_metrics(hr_cheeks, gt)
+    print(eval_report_cheeks)
+
+if __name__ == "__main__":
+   main()

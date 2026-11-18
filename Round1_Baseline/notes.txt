@@ -1,22 +1,32 @@
 TODO:
 
+1)
+Obter resultados para um video
+Tratamento do Dataset 1 (ver guidelines do projeto)
+evaluate.py (Dataset de 8 videos)
+Round1_Baseline_None.mat
+process_round1.py
+
+3)
 evm -> usar bandpass já implementado
 aplicar evm a mascara da testa ou das bochechas
 
 Testar:
 
+2)
 Filtros vs sem Filtros
+
+4)
 EVM vs sem EVM
 
+5)
 Testar outro canal de cor (HSV)
 
+6)
 Testar melhor resultado com as duas constraints e reportar resultados
-
-Coisas a ter em conta:
-Selecionar um valor
 
 Perguntas:
 Ground Truth do dataset da competição
-Que valor selecionar? Testas ou bochecha? Usar pico mais alto? Média
-PPG signal for the whole video??? Sim :(
+Que valor selecionar? Testas ou bochecha? Usar pico mais alto? Média?
+PPG signal for the whole video??? Sliding window for both signals
 Testar área menor para deteção das ROI?
