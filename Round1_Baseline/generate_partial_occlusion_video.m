@@ -1,4 +1,4 @@
-function generate_partial_occlusion_video(inputVideoPath, outputVideoPath)
+function generate_partial_occl_video(inputVideoPath, outputVideoPath)
 %generates a video of the occluding the bottom half of the face from an
 %input face video
 % input and output videos should both be in .mp4 format
@@ -125,6 +125,6 @@ function generate_partial_occlusion_video(inputVideoPath, outputVideoPath)
 end
 
 % Usage Example
-%inputVideo  = 'input_video.mp4';
-%outputVideo = 'masked_face_video.mp4';
-%generate_partial_occlusion_video(inputVideo, outputVideo);
+inputVideo  = 'target_video.avi';
+outputVideo = 'masked_face_video.avi';
+generate_partial_occl_video(inputVideo, outputVideo);

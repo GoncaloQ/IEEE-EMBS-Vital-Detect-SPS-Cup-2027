@@ -1,4 +1,5 @@
 import numpy as np
+import csv
 
 
 def calculate_metrics(estimated, reference):
@@ -54,3 +55,9 @@ def calculate_metrics(estimated, reference):
         },
         "undefined_reasons": reasons,
     }
+
+def write_to_csv(save_path, eval_report):
+        with open(save_path, "w") as file:
+            w = csv.DictWriter(file, eval_report.keys())
+            w.writeheader()
+            w.writerow(eval_report)

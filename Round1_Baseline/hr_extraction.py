@@ -2,10 +2,11 @@ import scipy
 import numpy as np
 from filters import *
 import matplotlib.pyplot as plt
+import csv
 
 from channels_forehead import signal_extraction_main_forehead
 from channels_cheeks import signal_extraction_main_cheeks
-from metrics import calculate_metrics
+from metrics import calculate_metrics, write_to_csv
 
 # Fourier Transform to get the most relevant frequencies of the signal
 def ffourier_transform(signal, fps=30):
@@ -62,7 +63,7 @@ def sliding_window(signal, window_size_seconds=10, step_size_seconds=1, fps=30):
 def extract_hr_signal(signal, fps=30):
        
    hr = []
-   windows, time = sliding_window(signal, fps=fps)
+   windows, time = sliding_window(signal, fps=30)
    for window in windows:
       hr.append(get_hr_bpm(window, fps))
 
@@ -73,7 +74,8 @@ def extract_hr_signal(signal, fps=30):
 # Computes evaluation metrics for that video
 
 def main():
-    target_video = 'target_video.mp4'
+
+    target_video = 'target_video.avi'
 
     #---------------------------------
     # 1. Signal extraction from video
@@ -170,7 +172,7 @@ def main():
     plt.plot(time, hr_forehead, linestyle='-', marker='o', color="green")
     plt.title("HR signal - Forehead")
     plt.xlabel("Time (s)")
-    plt.ylabel("Frequency (Hz)")
+    plt.ylabel("Frequency (BPM)")
     plt.grid(True)
     plt.savefig("Results/hr_forehead.png")
 
@@ -179,7 +181,7 @@ def main():
     plt.plot(time_c, hr_cheeks, linestyle='-', marker='o', color="green")
     plt.title("HR signal - Cheeks")
     plt.xlabel("Time (s)")
-    plt.ylabel("Frequency (Hz)")
+    plt.ylabel("Frequency (BPM)")
     plt.grid(True)
     plt.savefig("Results/hr_cheeks.png")
 
@@ -187,15 +189,44 @@ def main():
     # 4. Evaluation
     #---------------
     # Import and sample Ground Truth
-    gt = []
-    gt_time = []
-    
+    with open("gtdump.xmp", "r") as f:
+       reader = csv.reader(f)
+       time_gt_ms, hr_gt, _, _ = [list(c) for c in zip(*reader)]
+
+    plt.figure()
+    plt.plot(time_gt_ms, hr_gt)
+    plt.savefig("Results/gt.png")
+
+    # Interpolate high-res values onto the low-res timestamps
+    time = [i * 1000 for i in time]
+    time = np.asarray(time, dtype=float)
+    time_gt_ms = np.asarray(time_gt_ms, dtype=float)
+    hr_gt = np.asarray(hr_gt, dtype=float)
+    gt = np.interp(time, time_gt_ms, hr_gt)
+
+    plt.figure()
+    plt.plot(time_gt_ms, hr_gt)
+    plt.plot(time, gt)
+    plt.plot(time, hr_forehead)
+    plt.plot(time, hr_cheeks)
+    plt.legend(["ground truth", "gt aligned", "forehead", "cheeks"])
+    plt.title("GT and Estimation signal comparison")
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Frequency (BPM)")
+    plt.savefig("Results/gt_aligned.png")
+
     # Compute evaluation metrics
     eval_report_forehead = calculate_metrics(hr_forehead, gt)
     print(eval_report_forehead)
+    save_path = "Results/eval_report_forehead.csv"
+    write_to_csv(save_path, eval_report_forehead)
 
     eval_report_cheeks = calculate_metrics(hr_cheeks, gt)
     print(eval_report_cheeks)
+    save_path = "Results/eval_report_cheeks.csv"
+    write_to_csv(save_path, eval_report_cheeks)
+
+
 
 if __name__ == "__main__":
    main()
