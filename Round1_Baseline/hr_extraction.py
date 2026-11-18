@@ -59,20 +59,20 @@ green_cheeks, fps = signal_extraction_main_cheeks(target_video, 'g')
 time = [i/fps for i in range(len(green_forehead))]
 
 # Cheeks - raw signal
-plt.figure(figsize=(20,5))
+plt.figure(figsize=(15,5))
 plt.plot(time, green_cheeks, linestyle='-', marker='o', color="green")
 plt.title("Green Cheeks")
 plt.xlabel("Time (ms)")
 plt.ylabel("Channel intensity")
-plt.show()
+plt.savefig("Results/cheeks_raw.png")
 
 # Forehead
-plt.figure(figsize=(20,5))
+plt.figure(figsize=(15,5))
 plt.plot(time, green_forehead, linestyle='-', marker='o', color="green")
 plt.title("Green Forehead")
 plt.xlabel("Time (ms)")
 plt.ylabel("Channel intensity")
-plt.show()
+plt.savefig("Results/forehead_raw.png")
 
 # Detrending filter - raw signal
 fc = 0.2
@@ -86,37 +86,41 @@ N = 3
 filtered_signal_forehead = band_pass_butter_filtering(detrended_signal_forehead, fps, fc, N)
 filtered_signal_cheeks = band_pass_butter_filtering(detrended_signal_cheeks, fps, fc, N)
 
+plt.figure(figsize=(10,5))
 plt.plot(filtered_signal_forehead, linestyle='-', marker='o', color="green")
 plt.title("Filtered Green Channel Forehead")
 plt.xlabel("Frame")
 plt.ylabel("Mean green intensity")
 plt.grid(True)
-plt.show()
+plt.savefig("Results/forehead_filtered.png")
 
+plt.figure(figsize=(10,5))
 plt.plot(filtered_signal_cheeks, linestyle='-', marker='o', color="green")
 plt.title("Filtered Green Channel Cheeks")
 plt.xlabel("Frame")
 plt.ylabel("Mean green intensity")
 plt.grid(True)
-plt.show()
+plt.savefig("Results/cheeks_filtered.png")
 
 # FFT
 fourier_forehead, freq_array_forehead = ffourier_transform(filtered_signal_forehead, fps)
 fourier_cheeks, freq_array_cheeks = ffourier_transform(filtered_signal_cheeks, fps)
 
+plt.figure(figsize=(10,5))
 plt.plot(freq_array_forehead, np.abs(fourier_forehead), linestyle='-', marker='o', color="green")
 plt.title("Fourier Transform Green Channel Forehead")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("Magnitude")
 plt.grid(True)
-plt.show()
+plt.savefig("Results/fft_forehead.png")
 
+plt.figure(figsize=(10,5))
 plt.plot(freq_array_cheeks, np.abs(fourier_cheeks), linestyle='-', marker='o', color="green")
 plt.title("Fourier Transform Green Channel Cheeks")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("Magnitude")
 plt.grid(True)
-plt.show()
+plt.savefig("Results/fft_cheeks.png")
 
 # heart rate
 hr_forehead = extract_hr(green_forehead, fps, fc, N=3)

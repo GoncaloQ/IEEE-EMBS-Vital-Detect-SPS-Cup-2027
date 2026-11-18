@@ -1,3 +1,8 @@
+TODO:
+
+evm -> usar bandpass já implementado
+aplicar evm a mascara da testa ou das bochechas
+
 Testar:
 
 Filtros vs sem Filtros
