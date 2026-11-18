@@ -36,7 +36,10 @@ Retain `python -m pip freeze` and the Git revision with experiments. Do not inst
 multiple OpenCV distributions together. The retained MediaPipe 0.10.21 wheel has
 an ARM64 platform-metadata inconsistency with modern dependency checkers despite
 working universal binaries; see the exact failure in [cleanup results](docs/cleanup_results.md). Minimal Linux installations may need
-`libgl1 libegl1 libgles2 libportaudio2`. MediaPipe may need a permitted graphics
+`libgl1 libegl1 libgles2 libportaudio2`. If MediaPipe imports fail with
+`PulseAudio_Initialize: Can't connect to server`, install `pulseaudio` and start
+it with `pulseaudio --start --exit-idle-time=-1`, as the Linux CI does.
+MediaPipe may need a permitted graphics
 context on macOS even for CPU inference.
 
 ## Dataset and evaluation

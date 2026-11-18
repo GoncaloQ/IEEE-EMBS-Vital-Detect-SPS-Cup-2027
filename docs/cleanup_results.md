@@ -240,3 +240,9 @@ C4/C5 encoding, import safety, 25/30/29.97 FPS window boundaries, empty traces,
 invalid window parameters and all eight demo plots on controlled input.
 Ruff, actionlint, evaluator `--help` and whitespace/conflict-marker checks passed.
 No real participant recording or scientific accuracy result is claimed.
+
+GitHub run `44372485778` subsequently passed all checks on macOS but failed
+collection on both Linux Python versions: MediaPipe imports sounddevice, whose
+PortAudio initialization could not connect to a PulseAudio server. The Linux
+workflow now installs PulseAudio and starts a user daemon before importing
+MediaPipe; it does not stub audio modules or skip the affected integration tests.

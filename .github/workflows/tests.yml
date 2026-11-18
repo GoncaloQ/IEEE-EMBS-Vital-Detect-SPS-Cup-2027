@@ -32,7 +32,10 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Linux video dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg libgl1 libegl1 libgles2 libportaudio2
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libgl1 libegl1 libgles2 libportaudio2 pulseaudio
+      - name: Start Linux audio service for MediaPipe imports
+        if: runner.os == 'Linux'
+        run: pulseaudio --start --exit-idle-time=-1
       - name: macOS video dependencies
         if: runner.os == 'macOS'
         run: brew install ffmpeg
