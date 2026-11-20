@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 from scipy import sparse
+from scipy.signal import medfilt
 
 
 def smoothness_priors_detrend(signal, lmbda):
@@ -47,3 +48,7 @@ def band_pass_butter_filtering(signal, fps, fc, N):
         N, [fc_lower, fc_upper], btype="bandpass", fs=fps, output="sos"
     )
     return scipy.signal.sosfiltfilt(coefficients, signal)
+
+def median_filter(signal, kernel=5):
+    filtered = medfilt(signal, kernel_size=kernel)
+    return filtered

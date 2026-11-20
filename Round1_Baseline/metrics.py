@@ -1,5 +1,7 @@
 import numpy as np
 import csv
+import matplotlib.pyplot as plt
+import scipy
 
 
 def calculate_metrics(estimated, reference):
@@ -21,20 +23,24 @@ def calculate_metrics(estimated, reference):
     bias = float(np.mean(normalized) * scale) if n else None
     sd = float(np.std(normalized, ddof=1) * scale) if n >= 2 else None
     correlation = None
+
     if n < 2:
         reasons["pearson_r"] = "Fewer than two pairs"
         reasons["bland_altman_limits"] = "Fewer than two pairs; sample SD undefined"
     elif np.all(e == e[0]) or np.all(r == r[0]):
         reasons["pearson_r"] = "Constant predicted or reference HR"
+
     else:
         x = e / np.max(abs(e))
         y = r / np.max(abs(r))
         x, y = x - x.mean(), y - y.mean()
         x, y = x / np.max(abs(x)), y / np.max(abs(y))
         correlation = float(np.clip(np.dot(x, y) / (np.linalg.norm(x) * np.linalg.norm(y)), -1, 1))
+
     if not n:
         for name in ("mae_bpm", "rmse_bpm", "median_absolute_error_bpm", "bland_altman_bias"):
             reasons[name] = "No valid paired observations"
+
     lower = bias - 1.96 * sd if sd is not None else None
     upper = bias + 1.96 * sd if sd is not None else None
     if sd is not None and not np.isfinite([sd, lower, upper]).all():
@@ -61,3 +67,16 @@ def write_to_csv(save_path, eval_report):
             w = csv.DictWriter(file, eval_report.keys())
             w.writeheader()
             w.writerow(eval_report)
+
+def bland_altman_plot(data1, data2, *args, **kwargs):
+    data1     = np.asarray(data1)
+    data2     = np.asarray(data2)
+    mean      = np.mean([data1, data2], axis=0)
+    diff      = data1 - data2                   # Difference between data1 and data2
+    md        = np.mean(diff)                   # Mean of the difference
+    sd        = np.std(diff, axis=0)            # Standard deviation of the difference
+
+    plt.scatter(mean, diff, *args, **kwargs)
+    plt.axhline(md,           color='gray', linestyle='--')
+    plt.axhline(md + 1.96*sd, color='gray', linestyle='--')
+    plt.axhline(md - 1.96*sd, color='gray', linestyle='--')
