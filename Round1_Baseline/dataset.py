@@ -63,7 +63,6 @@ class GroundTruth:
     ppg: np.ndarray
     hr_bpm: np.ndarray
     timestamps_s: np.ndarray
-    source_path: Path
 
     @property
     def duplicate_timestamp_count(self):
@@ -119,4 +118,4 @@ def read_ground_truth(path):
         raise ValueError("Timestamps must be nonnegative, nondecreasing, and span positive time")
     if np.median(np.diff(t)) > 1 or t[-1] - t[0] > 3600:
         raise ValueError("Unsupported timestamp scale; expected Dataset 2 seconds")
-    return GroundTruth(ppg, hr, t, path)
+    return GroundTruth(ppg, hr, t)

@@ -3,7 +3,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from vital_detect.signals.processing import validate_fps
+
+def validate_fps(fps, high_hz):
+    if not np.isfinite(fps) or fps <= 0:
+        raise ValueError("FPS must be finite and positive")
+    if not np.isfinite(high_hz) or high_hz <= 0 or high_hz >= fps / 2:
+        raise ValueError("HR upper cutoff must be strictly below the Nyquist frequency")
 
 
 class VideoReader:

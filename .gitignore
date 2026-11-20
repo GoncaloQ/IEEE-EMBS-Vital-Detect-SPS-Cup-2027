@@ -83,3 +83,11 @@ generated/
 results/
 benchmarks/
 benchmark_results/
+
+# Team demo outputs and exported figures
+Results/
+*.png
+*.pdf
+*.svg
+*.jpeg
+*.jpg

@@ -1,4 +1,4 @@
-name: Synthetic HR pipeline tests
+name: Round 1 synthetic integration tests
 
 on:
   push:
@@ -32,12 +32,15 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Linux video dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg libgl1 libegl1 libgles2 libportaudio2
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libgl1 libegl1 libgles2 libportaudio2 pulseaudio
+      - name: Start Linux audio service for MediaPipe imports
+        if: runner.os == 'Linux'
+        run: pulseaudio --start --exit-idle-time=-1
       - name: macOS video dependencies
         if: runner.os == 'macOS'
         run: brew install ffmpeg
       - run: python -m pip install --upgrade pip
       - run: python -m pip install '.[test]'
-      - run: vital-detect --help
-      - run: ruff check src tests Round1_Baseline/process_round1.py
+      - run: python -m Round1_Baseline.evaluate --help
+      - run: ruff check Round1_Baseline tests
       - run: python -m pytest -q

@@ -8,7 +8,7 @@ def smoothness_priors_detrend(signal, lmbda):
     Separate a slowly varying trend from a 1D signal.
 
     ``lmbda`` controls the trend smoothness: larger values favor a smoother
-    trend. Returns the detrended signal and the estimated trend.
+    trend. Returns the detrended signal.
     """
     sample_count = len(signal)
     identity = sparse.eye(sample_count)

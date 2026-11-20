@@ -4,11 +4,15 @@ output is the mean of each frame of the rgb channel after masking only the foreh
 '''
 
 import cv2
-import numpy as np
 import mediapipe as mp
+import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from utils import download_model_if_missing
+
+if __package__:
+    from .utils import download_model_if_missing
+else:
+    from utils import download_model_if_missing
 
 #sample skin colour
 def get_calibrated_skin_mask(hsv_frame, sample_point, radius=5):

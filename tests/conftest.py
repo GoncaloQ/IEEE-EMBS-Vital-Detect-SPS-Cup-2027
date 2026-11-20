@@ -5,15 +5,15 @@ import numpy as np
 import pytest
 
 
-class ControlledROI:
-    def __init__(self, config):
-        pass
+def controlled_signal(path, options):
+    """Synthetic decoder seam; never claims facial ROI validation."""
+    from Round1_Baseline.video import VideoReader
 
-    def sample(self, rgb, timestamp):
-        return rgb.mean(axis=(0, 1)), "valid"
-
-    def close(self):
-        pass
+    with VideoReader(path) as reader:
+        pairs = [(t, rgb[:, :, "rgb".index(options.channel)].mean()) for t, rgb in reader]
+        metadata = dict(reader.metadata)
+    t, signal = np.array(pairs).T
+    return t, signal, metadata
 
 
 def synthetic_rgb(fps=30, seconds=30, bpm=72):

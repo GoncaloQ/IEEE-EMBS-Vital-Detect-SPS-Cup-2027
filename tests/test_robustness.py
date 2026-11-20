@@ -1,10 +1,10 @@
 import shutil
 
 import pytest
-from conftest import ControlledROI, write_video
+from conftest import controlled_signal, write_video
 
-from vital_detect.config import Config
-from vital_detect.robustness.benchmark import benchmark, probe, transform
+from Round1_Baseline.evaluate import Options
+from Round1_Baseline.robustness import benchmark, probe, transform
 
 HAS_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 
@@ -30,7 +30,7 @@ def test_real_encoding_meets_measured_conditions(tmp_path, condition):
 @pytest.mark.skipif(not HAS_FFMPEG, reason="FFmpeg/ffprobe optional external tools unavailable")
 def test_full_benchmark_outputs_and_native_not_upscaled(dataset, tmp_path):
     result = benchmark(
-        dataset, tmp_path / "bench", Config(), ["subject1"], roi_factory=ControlledROI
+        dataset, tmp_path / "bench", Options(), ["subject1"], signal_extractor=controlled_signal
     )
     assert len(result["conditions"]) == 4
     for name, summary in result["conditions"].items():
@@ -49,14 +49,14 @@ def test_missing_ffmpeg_is_explicit(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match="ffprobe"):
         probe(tmp_path / "none.avi")
     with pytest.raises(ValueError, match="ffmpeg"):
-        benchmark(tmp_path, tmp_path / "out", Config())
+        benchmark(tmp_path, tmp_path / "out", Options())
 
 
 @pytest.mark.parametrize("bitrate", [None, 501_000])
 def test_unverified_or_excess_bitrate_cannot_pass_c5(monkeypatch, tmp_path, bitrate):
     import importlib
 
-    module = importlib.import_module("vital_detect.robustness.benchmark")
+    module = importlib.import_module("Round1_Baseline.robustness")
     source = {
         "width": 640,
         "height": 480,
@@ -79,7 +79,7 @@ def test_unverified_or_excess_bitrate_cannot_pass_c5(monkeypatch, tmp_path, bitr
 def test_wrong_transformation_fps_is_rejected(monkeypatch, tmp_path, condition):
     import importlib
 
-    module = importlib.import_module("vital_detect.robustness.benchmark")
+    module = importlib.import_module("Round1_Baseline.robustness")
     source = {
         "width": 640,
         "height": 480,
@@ -103,7 +103,7 @@ def test_probe_uses_container_when_stream_fields_are_unavailable(monkeypatch, tm
     import json
     from types import SimpleNamespace
 
-    module = importlib.import_module("vital_detect.robustness.benchmark")
+    module = importlib.import_module("Round1_Baseline.robustness")
     payload = {
         "streams": [
             {
@@ -131,7 +131,7 @@ def test_probe_uses_container_when_stream_fields_are_unavailable(monkeypatch, tm
 def test_wrong_requested_resolution_and_unknown_origin_are_rejected(monkeypatch, tmp_path):
     import importlib
 
-    module = importlib.import_module("vital_detect.robustness.benchmark")
+    module = importlib.import_module("Round1_Baseline.robustness")
     source = {
         "width": 640,
         "height": 480,
@@ -158,7 +158,7 @@ def test_failed_source_probe_cannot_silently_use_full_interval(dataset, tmp_path
     import importlib
     from types import SimpleNamespace
 
-    module = importlib.import_module("vital_detect.robustness.benchmark")
+    module = importlib.import_module("Round1_Baseline.robustness")
     monkeypatch.setattr(shutil, "which", lambda name: "/fake/tool")
 
     def invalid_probe(path):
@@ -167,20 +167,25 @@ def test_failed_source_probe_cannot_silently_use_full_interval(dataset, tmp_path
     monkeypatch.setattr(module, "probe", invalid_probe)
     monkeypatch.setattr(module, "_run", lambda command: SimpleNamespace(stdout="ffmpeg test"))
     summary = benchmark(
-        dataset, tmp_path / "out", Config(), ["subject1"], constraints=(), roi_factory=ControlledROI
+        dataset,
+        tmp_path / "out",
+        Options(),
+        ["subject1"],
+        constraints=(),
+        signal_extractor=controlled_signal,
     )
     assert summary["conditions"]["native"]["counts"]["recordings_failed"] == 1
     with (tmp_path / "out/native/per_video_results.csv").open() as handle:
         row = next(csv.DictReader(handle))
     assert "common benchmark interval" in row["reason"]
-    assert row["method"] == "green"
+    assert row["method"] == "team-extract_hr"
 
 
 def test_ffmpeg_diagnostic_is_preserved(monkeypatch):
     import importlib
     import subprocess
 
-    module = importlib.import_module("vital_detect.robustness.benchmark")
+    module = importlib.import_module("Round1_Baseline.robustness")
 
     def failed(*args, **kwargs):
         raise subprocess.CalledProcessError(1, args[0], stderr="unsupported codec")
