@@ -19,9 +19,14 @@ def ffourier_transform(signal, fps=60):
   return fourier, freq_array
 
 def detect_peaks(signal, time_array):
-   indexes, _ = scipy.signal.find_peaks(signal)
+   indexes, _ = scipy.signal.find_peaks(signal, prominence=0.1)
    timestamp_peaks = [time_array[i] for i in indexes]
    return timestamp_peaks
+
+def filter_plausible_peaks(peaks, min_delta, max_delta):
+   mask = (peaks >= min_delta) & (peaks <= max_delta)
+   delta_t = peaks[mask]
+   return delta_t
 
 # Returns value of heart rate for a computed Fourier transform
 def get_hr_bpm(signal, fps=60):
@@ -82,6 +87,7 @@ def extract_hr_signal(signal, fps=60, mode="fft", window_time_seconds=10):
             win_time = np.arange(len(window), dtype=float) / float(fps)
             timestamp_peaks = detect_peaks(window, win_time)
             delta_t = np.diff(timestamp_peaks)
+            delta_t = filter_plausible_peaks(delta_t, min_delta=0.5, max_delta=1.50)
             hr.append(60/np.mean(delta_t))
 
    return time, hr
@@ -181,20 +187,20 @@ def main():
     plt.close()
 
     # heart rate
-    hr_forehead = get_hr_bpm(filtered_signal_forehead, fps=fps)
-    print(f"Heart Rate (forehead): {hr_forehead:.2f} BPM")
-    hr_cheeks = get_hr_bpm(filtered_signal_cheeks, fps=fps)
-    print(f"Heart Rate (cheeks): {hr_cheeks:.2f} BPM")
+    hr_f = get_hr_bpm(filtered_signal_forehead, fps=fps)
+    print(f"Heart Rate (forehead): {hr_f:.2f} BPM")
+    hr_c = get_hr_bpm(filtered_signal_cheeks, fps=fps)
+    print(f"Heart Rate (cheeks): {hr_c:.2f} BPM")
 
     #--------------------------------------------------
     # 3.2 HR signal extraction - FFT to sliding window
     #--------------------------------------------------
 
-    time, hr_forehead = extract_hr_signal(filtered_signal_forehead, fps=fps, mode="peak_detection", window_time_seconds=10)
-    time_c, hr_cheeks = extract_hr_signal(filtered_signal_cheeks, fps=fps, mode="peak_detection", window_time_seconds=10)
+    time, hr_forehead = extract_hr_signal(filtered_signal_forehead, fps=fps, mode="peak_detection", window_time_seconds=20)
+    time_c, hr_cheeks = extract_hr_signal(filtered_signal_cheeks, fps=fps, mode="peak_detection", window_time_seconds=20)
 
-   #  hr_forehead = median_filter(hr_forehead, 7)
-   #  hr_cheeks = median_filter(hr_cheeks, 7)
+    hr_forehead = median_filter(hr_forehead, 9)
+    hr_cheeks = median_filter(hr_cheeks, 9)
 
     plt.figure(figsize=(10,5))
     plt.plot(time, hr_forehead, linestyle='-', color="green")
@@ -235,6 +241,8 @@ def main():
     hr_gt = np.asarray(hr_gt, dtype=float)
     gt = np.interp(time, time_gt_ms, hr_gt)
 
+    print(f"Average HR (GT): {np.mean(gt):.2f} BPM")
+
     plt.figure()
     plt.plot(time_gt_ms, hr_gt)
     plt.plot(time, gt)
@@ -245,6 +253,8 @@ def main():
     plt.xlabel("Time (ms)")
     plt.ylabel("Frequency (BPM)")
     plt.savefig("Results/gt_aligned.png")
+    plt.ylim([50,120])
+    plt.savefig("Results/gt_aligned_scale.png")
     plt.close()
 
     # Compute evaluation metrics
@@ -267,6 +277,7 @@ def main():
     bland_altman_plot(hr_forehead, gt)
     plt.ylabel("Difference")
     plt.xlabel("Average")
+    plt.ylim([-6,3])
     plt.title("Bland Altman Plot - Forehead")
     plt.savefig(results_dir / "bland_altman_forehead")
     plt.close()
@@ -275,6 +286,7 @@ def main():
     bland_altman_plot(hr_cheeks, gt)
     plt.ylabel("Difference")
     plt.xlabel("Average")
+    plt.ylim([-6,3])
     plt.title("Bland Altman Plot - Cheeks")
     plt.savefig(results_dir / "bland_altman_cheeks")
     plt.close()
