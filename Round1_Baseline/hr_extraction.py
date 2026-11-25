@@ -1,4 +1,6 @@
 import scipy
+import os
+import pandas as pd
 import numpy as np
 from filters import *
 import matplotlib.pyplot as plt
@@ -199,8 +201,8 @@ def main():
     time, hr_forehead = extract_hr_signal(filtered_signal_forehead, fps=fps, mode="peak_detection", window_time_seconds=20)
     time_c, hr_cheeks = extract_hr_signal(filtered_signal_cheeks, fps=fps, mode="peak_detection", window_time_seconds=20)
 
-    hr_forehead = median_filter(hr_forehead, 9)
-    hr_cheeks = median_filter(hr_cheeks, 9)
+    hr_forehead = median_filter(hr_forehead, 7)
+    hr_cheeks = median_filter(hr_cheeks, 7)
 
     plt.figure(figsize=(10,5))
     plt.plot(time, hr_forehead, linestyle='-', color="green")
@@ -258,20 +260,31 @@ def main():
     plt.close()
 
     # Compute evaluation metrics
+    save_path = "Results/eval_report.xlsx"
+
+    #Forehead
     eval_report_forehead = calculate_metrics(hr_forehead, gt)
     print("Forehead")
     for k in eval_report_forehead.keys():
        print(f"{k}: {eval_report_forehead[k]}")
-    save_path = "Results/eval_report_forehead.csv"
-    write_to_csv(save_path, eval_report_forehead)
 
+    df_forehead = pd.DataFrame(
+       list(eval_report_forehead.items()), columns=["Metric", "Value"]
+    )
+
+    # Cheeks
     eval_report_cheeks = calculate_metrics(hr_cheeks, gt)
-
     print("\nCheeks")
-    for k in eval_report_cheeks.keys():
-      print(f"{k}: {eval_report_cheeks[k]}")
-    save_path = "Results/eval_report_cheeks.csv"
-    write_to_csv(save_path, eval_report_cheeks)
+    for k, v in eval_report_cheeks.items():
+       print(f"{k}: {v}")
+    df_cheeks = pd.DataFrame(
+       list(eval_report_cheeks.items()), columns=["Metric", "Value"]
+    )
+
+    # Save results to the same file
+    with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
+       df_forehead.to_excel(writer, index=False, sheet_name="Forehead")
+       df_cheeks.to_excel(writer, index=False, sheet_name="Cheeks")
 
     plt.figure()
     bland_altman_plot(hr_forehead, gt)
